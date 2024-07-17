@@ -19,6 +19,7 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const middleware_1 = require("../utils/middleware");
 const client_s3_1 = require("@aws-sdk/client-s3");
 const s3_presigned_post_1 = require("@aws-sdk/s3-presigned-post");
+const types_1 = require("../types");
 const router = (0, express_1.Router)();
 const prismaClient = new client_1.PrismaClient();
 const jwtSecret = process.env.JWT_SECRET;
@@ -30,6 +31,7 @@ const s3Client = new client_s3_1.S3Client({
         secretAccessKey: process.env.AWS_SECRET_KEY
     }
 });
+const DEFAULT_TITLE = "Select the most clickable thumbnail";
 router.post('/signin', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     //todo: add signin verification logic here
     const hardcodeWalletAddress = "HvsdhfbshdbfytGYusbdjnda1jk32v4jh23v5bk24j5msknd9j";
@@ -86,7 +88,7 @@ router.get('/presignedUrl', middleware_1.authMiddleware, (req, res) => __awaiter
         });
         res.json({
             success: true,
-            url,
+            preSignedUrl: url,
             fields
         });
     }
@@ -96,5 +98,41 @@ router.get('/presignedUrl', middleware_1.authMiddleware, (req, res) => __awaiter
             error
         });
     }
+}));
+router.post('/task', middleware_1.authMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    //validate the inputs from the user
+    //@ts-ignore
+    const userId = req.userId;
+    const body = req.body;
+    const parseData = types_1.createTaskInput.safeParse(body);
+    if (!parseData.success) {
+        return res.status(411).json({
+            success: false,
+            message: 'Input validation failed'
+        });
+    }
+    //parse the signature here to ensure the person has paid whatever X amount
+    const response = yield prismaClient.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
+        var _a;
+        const response = yield tx.task.create({
+            data: {
+                title: (_a = parseData.data.title) !== null && _a !== void 0 ? _a : DEFAULT_TITLE,
+                amount: "1",
+                signature: parseData.data.signature,
+                user_id: userId
+            }
+        });
+        yield tx.option.createMany({
+            data: parseData.data.options.map(x => ({
+                image_url: x.imageUrl,
+                task_id: response.id
+            }))
+        });
+        return response;
+    }));
+    res.json({
+        success: true,
+        id: response.id
+    });
 }));
 exports.default = router;

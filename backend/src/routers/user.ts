@@ -6,6 +6,7 @@ import { authMiddleware } from '../utils/middleware';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post'
+import { createTaskInput } from '../types';
 
 
 
@@ -20,6 +21,7 @@ const s3Client = new S3Client({
         secretAccessKey: process.env.AWS_SECRET_KEY!
     }
 });
+const DEFAULT_TITLE = "Select the most clickable thumbnail"
 
 router.post('/signin', async (req, res) => {
     //todo: add signin verification logic here
@@ -95,6 +97,48 @@ router.get('/presignedUrl', authMiddleware, async (req, res) => {
             error
         })
     }
+})
+
+router.post('/task', authMiddleware, async (req, res) => {
+    //validate the inputs from the user
+    //@ts-ignore
+    const userId = req.userId
+    const body = req.body;
+    const parseData = createTaskInput.safeParse(body);
+
+    if (!parseData.success) {
+        return res.status(411).json({
+            success: false,
+            message: 'Input validation failed'
+        })
+    }
+
+    //parse the signature here to ensure the person has paid whatever X amount
+
+    const response = await prismaClient.$transaction(async tx => {
+        const response = await tx.task.create({
+            data: {
+                title: parseData.data.title ?? DEFAULT_TITLE,
+                amount: "1",
+                signature: parseData.data.signature,
+                user_id: userId
+            }
+        })
+
+        await tx.option.createMany({
+            data: parseData.data.options.map(x => ({
+                image_url: x.imageUrl,
+                task_id: response.id
+            }))
+        })
+        return response;
+    })
+
+    res.json({
+        success: true,
+        id: response.id
+    })
+
 })
 
 export default router
