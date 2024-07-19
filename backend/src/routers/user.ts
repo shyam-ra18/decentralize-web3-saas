@@ -115,30 +115,102 @@ router.post('/task', authMiddleware, async (req, res) => {
 
     //parse the signature here to ensure the person has paid whatever X amount
 
-    const response = await prismaClient.$transaction(async tx => {
-        const response = await tx.task.create({
-            data: {
-                title: parseData.data.title ?? DEFAULT_TITLE,
-                amount: "1",
-                signature: parseData.data.signature,
-                user_id: userId
+    try {
+
+        const response = await prismaClient.$transaction(async tx => {
+            const response = await tx.task.create({
+                data: {
+                    title: parseData.data.title ?? DEFAULT_TITLE,
+                    amount: "1",
+                    signature: parseData.data.signature,
+                    user_id: userId
+                }
+            })
+
+            await tx.option.createMany({
+                data: parseData.data.options.map(x => ({
+                    image_url: x.imageUrl,
+                    task_id: response.id
+                }))
+            })
+            return response;
+        })
+
+        res.json({
+            success: true,
+            id: response.id
+        })
+    } catch (error: any) {
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        })
+    }
+})
+
+router.get('/task', authMiddleware, async (req, res) => {
+
+    //@ts-ignore
+    const taskId: string = req.query.taskId;
+    //@ts-ignore
+    const userId: string = req.userId;
+
+    const taskDetails = await prismaClient.task.findFirst({
+        where: {
+            user_id: Number(userId),
+            id: Number(taskId)
+        },
+        include: {
+            options: true
+        }
+    })
+
+    if (!taskDetails) {
+        return res.status(411).json({
+            success: false,
+            message: "You do not have access to this task"
+        })
+    }
+
+    //todo: make faster
+    const response = await prismaClient.submission.findMany({
+        where: {
+            task_id: Number(taskId)
+        },
+        include: {
+            option: true
+        }
+    })
+
+    const result: Record<string, {
+        count: number,
+        option: {
+            imageUrl: string
+        }
+    }> = {};
+
+    taskDetails.options.forEach(option => {
+        if (!result[option.id]) {
+            result[option.id] = {
+                count: 0,
+                option: {
+                    imageUrl: option.image_url
+                }
             }
-        })
-
-        await tx.option.createMany({
-            data: parseData.data.options.map(x => ({
-                image_url: x.imageUrl,
-                task_id: response.id
-            }))
-        })
-        return response;
+        }
+        else {
+            result[option.id].count++
+        }
     })
 
-    res.json({
+    response.forEach(r => {
+        result[r.option_id].count++
+    })
+
+    res.status(200).json({
         success: true,
-        id: response.id
+        result
     })
-
 })
 
 export default router

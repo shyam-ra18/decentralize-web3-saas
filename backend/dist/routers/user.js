@@ -112,27 +112,86 @@ router.post('/task', middleware_1.authMiddleware, (req, res) => __awaiter(void 0
         });
     }
     //parse the signature here to ensure the person has paid whatever X amount
-    const response = yield prismaClient.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
-        var _a;
-        const response = yield tx.task.create({
-            data: {
-                title: (_a = parseData.data.title) !== null && _a !== void 0 ? _a : DEFAULT_TITLE,
-                amount: "1",
-                signature: parseData.data.signature,
-                user_id: userId
-            }
+    try {
+        const response = yield prismaClient.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
+            var _a;
+            const response = yield tx.task.create({
+                data: {
+                    title: (_a = parseData.data.title) !== null && _a !== void 0 ? _a : DEFAULT_TITLE,
+                    amount: "1",
+                    signature: parseData.data.signature,
+                    user_id: userId
+                }
+            });
+            yield tx.option.createMany({
+                data: parseData.data.options.map(x => ({
+                    image_url: x.imageUrl,
+                    task_id: response.id
+                }))
+            });
+            return response;
+        }));
+        res.json({
+            success: true,
+            id: response.id
         });
-        yield tx.option.createMany({
-            data: parseData.data.options.map(x => ({
-                image_url: x.imageUrl,
-                task_id: response.id
-            }))
+    }
+    catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message
         });
-        return response;
-    }));
-    res.json({
+    }
+}));
+router.get('/task', middleware_1.authMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    //@ts-ignore
+    const taskId = req.query.taskId;
+    //@ts-ignore
+    const userId = req.userId;
+    const taskDetails = yield prismaClient.task.findFirst({
+        where: {
+            user_id: Number(userId),
+            id: Number(taskId)
+        },
+        include: {
+            options: true
+        }
+    });
+    if (!taskDetails) {
+        return res.status(411).json({
+            success: false,
+            message: "You do not have access to this task"
+        });
+    }
+    //todo: make faster
+    const response = yield prismaClient.submission.findMany({
+        where: {
+            task_id: Number(taskId)
+        },
+        include: {
+            option: true
+        }
+    });
+    const result = {};
+    taskDetails.options.forEach(option => {
+        if (!result[option.id]) {
+            result[option.id] = {
+                count: 0,
+                option: {
+                    imageUrl: option.image_url
+                }
+            };
+        }
+        else {
+            result[option.id].count++;
+        }
+    });
+    response.forEach(r => {
+        result[r.option_id].count++;
+    });
+    res.status(200).json({
         success: true,
-        id: response.id
+        result
     });
 }));
 exports.default = router;
