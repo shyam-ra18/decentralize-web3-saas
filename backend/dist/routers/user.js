@@ -20,6 +20,7 @@ const middleware_1 = require("../utils/middleware");
 const client_s3_1 = require("@aws-sdk/client-s3");
 const s3_presigned_post_1 = require("@aws-sdk/s3-presigned-post");
 const types_1 = require("../types");
+const helper_1 = require("../utils/helper");
 const router = (0, express_1.Router)();
 const prismaClient = new client_1.PrismaClient();
 const jwtSecret = process.env.JWT_SECRET;
@@ -118,7 +119,7 @@ router.post('/task', middleware_1.authMiddleware, (req, res) => __awaiter(void 0
             const response = yield tx.task.create({
                 data: {
                     title: (_a = parseData.data.title) !== null && _a !== void 0 ? _a : DEFAULT_TITLE,
-                    amount: "1",
+                    amount: 1 * helper_1.TOTAL_DECIMALS,
                     signature: parseData.data.signature,
                     user_id: userId
                 }

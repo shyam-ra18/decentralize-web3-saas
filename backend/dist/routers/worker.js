@@ -23,52 +23,80 @@ const router = (0, express_1.Router)();
 const prismaClient = new client_1.PrismaClient();
 const jwtSecret = process.env.JWT_SECRET_WORKER;
 const TOTAL_SUBMISSIONS = 100;
-router.post('/submission', middleware_1.authMiddlewareWorker, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/balance', middleware_1.authMiddlewareWorker, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     // @ts-ignore
     const userId = req.userId;
-    const body = req.body;
-    const parseBody = types_1.createSubmissionInput.safeParse(body);
-    if (!parseBody.success) {
-        return res.status(411).json({
-            success: false,
-            message: 'Input validation failed'
-        });
-    }
-    const task = yield (0, db_1.getNextTask)(Number(userId));
-    if (!task || (task === null || task === void 0 ? void 0 : task.id) !== Number(parseBody.data.taskId)) {
-        return res.status(411).json({
-            success: false,
-            message: 'Incorrect task id'
-        });
-    }
-    const amount = (Number(task.amount) / TOTAL_SUBMISSIONS).toString();
-    const submission = yield prismaClient.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
-        const submission = yield prismaClient.submission.create({
-            data: {
-                option_id: Number(parseBody.data.selection),
-                worker_id: userId,
-                task_id: Number(parseBody.data.taskId),
-                amount
-            }
-        });
-        yield prismaClient.worker.update({
-            where: {
-                id: userId,
-            },
-            data: {
-                pending_amount: {
-                    increment: Number(amount),
-                }
-            }
-        });
-        return submission;
-    }));
-    const nextTask = yield (0, db_1.getNextTask)(userId);
-    res.status(200).json({
-        succes: true,
-        nextTask,
-        amount
+    const worker = yield prismaClient.worker.findFirst({
+        where: {
+            id: Number(userId)
+        }
     });
+    if (!worker) {
+        return res.status(400).json({
+            success: false,
+            message: 'Worker not found'
+        });
+    }
+    res.status(200).json({
+        success: true,
+        pendingAmount: worker.pending_amount,
+        lockedAmount: worker.locked_amount,
+    });
+}));
+router.post('/submission', middleware_1.authMiddlewareWorker, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        // @ts-ignore
+        const userId = req.userId;
+        const body = req.body;
+        const parseBody = types_1.createSubmissionInput.safeParse(body);
+        if (!parseBody.success) {
+            return res.status(411).json({
+                success: false,
+                message: 'Input validation failed'
+            });
+        }
+        const task = yield (0, db_1.getNextTask)(Number(userId));
+        if (!task || (task === null || task === void 0 ? void 0 : task.id) !== Number(parseBody.data.taskId)) {
+            return res.status(411).json({
+                success: false,
+                message: 'Incorrect task id'
+            });
+        }
+        const amount = (Number(task.amount) / TOTAL_SUBMISSIONS);
+        const submission = yield prismaClient.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
+            const submission = yield tx.submission.create({
+                data: {
+                    option_id: Number(parseBody.data.selection),
+                    worker_id: userId,
+                    task_id: Number(parseBody.data.taskId),
+                    amount
+                }
+            });
+            yield tx.worker.update({
+                where: {
+                    id: userId,
+                },
+                data: {
+                    pending_amount: {
+                        increment: Number(amount),
+                    }
+                }
+            });
+            return submission;
+        }));
+        const nextTask = yield (0, db_1.getNextTask)(userId);
+        res.status(200).json({
+            succes: true,
+            nextTask,
+            amount
+        });
+    }
+    catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error || "Server error"
+        });
+    }
 }));
 router.get('/nextTask', middleware_1.authMiddlewareWorker, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     //@ts-ignore
