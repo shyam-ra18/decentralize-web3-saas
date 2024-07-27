@@ -23,6 +23,53 @@ const router = (0, express_1.Router)();
 const prismaClient = new client_1.PrismaClient();
 const jwtSecret = process.env.JWT_SECRET_WORKER;
 const TOTAL_SUBMISSIONS = 100;
+router.post('/payout', middleware_1.authMiddlewareWorker, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    //@ts-ignore
+    const userId = req.userId;
+    const worker = yield prismaClient.worker.findFirst({
+        where: { id: Number(userId) }
+    });
+    if (!worker) {
+        return res.status(400).json({
+            success: false,
+            message: 'Worker not found'
+        });
+    }
+    const address = worker === null || worker === void 0 ? void 0 : worker.address;
+    //logic here to create a txns
+    //solana.web3.createTransaction
+    const tnxId = "0x123b1j3b12414";
+    //should add a lock here
+    yield prismaClient.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
+        yield tx.worker.update({
+            where: {
+                id: Number(userId)
+            },
+            data: {
+                pending_amount: {
+                    decrement: worker.pending_amount
+                },
+                locked_amount: {
+                    increment: worker.pending_amount
+                }
+            }
+        });
+        yield tx.payouts.create({
+            data: {
+                user_id: Number(userId),
+                amount: worker.pending_amount,
+                status: 'Processing',
+                signature: tnxId
+            }
+        });
+    }));
+    //send the tnx to solana blockchain
+    res.status(200).json({
+        success: true,
+        message: 'Processing Payout',
+        amount: worker.pending_amount
+    });
+}));
 router.get('/balance', middleware_1.authMiddlewareWorker, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     // @ts-ignore
     const userId = req.userId;

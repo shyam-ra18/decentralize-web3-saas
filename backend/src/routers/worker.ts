@@ -16,7 +16,7 @@ router.post('/payout', authMiddlewareWorker, async (req, res) => {
     //@ts-ignore
     const userId: string = req.userId;
     const worker = await prismaClient.worker.findFirst({
-        where: { id: Number() }
+        where: { id: Number(userId) }
     })
 
     if (!worker) {
@@ -31,6 +31,39 @@ router.post('/payout', authMiddlewareWorker, async (req, res) => {
     //solana.web3.createTransaction
     const tnxId = "0x123b1j3b12414";
 
+    //should add a lock here
+    await prismaClient.$transaction(async tx => {
+        await tx.worker.update({
+            where: {
+                id: Number(userId)
+            },
+            data: {
+                pending_amount: {
+                    decrement: worker.pending_amount
+                },
+                locked_amount: {
+                    increment: worker.pending_amount
+                }
+            }
+        })
+
+        await tx.payouts.create({
+            data: {
+                user_id: Number(userId),
+                amount: worker.pending_amount,
+                status: 'Processing',
+                signature: tnxId
+            }
+        })
+    })
+
+    //send the tnx to solana blockchain
+
+    res.status(200).json({
+        success: true,
+        message: 'Processing Payout',
+        amount: worker.pending_amount
+    })
 })
 
 router.get('/balance', authMiddlewareWorker, async (req, res) => {
