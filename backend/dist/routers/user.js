@@ -35,10 +35,11 @@ const s3Client = new client_s3_1.S3Client({
 const DEFAULT_TITLE = "Select the most clickable thumbnail";
 router.post('/signin', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     //todo: add signin verification logic here
-    const hardcodeWalletAddress = "HvsdhfbshdbfytGYusbdjnda1jk32v4jh23v5bk24j5msknd9j";
+    // const hardcodeWalletAddress = "HvsdhfbshdbfytGYusbdjnda1jk32v4jh23v5bk24j5msknd9j";
+    const address = req.body.signature;
     const existingUser = yield prismaClient.user.findFirst({
         where: {
-            address: hardcodeWalletAddress
+            address: address
         }
     });
     if (existingUser) {
@@ -53,7 +54,7 @@ router.post('/signin', (req, res) => __awaiter(void 0, void 0, void 0, function*
     else {
         const user = yield prismaClient.user.create({
             data: {
-                address: hardcodeWalletAddress
+                address: address
             }
         });
         const token = jsonwebtoken_1.default.sign({

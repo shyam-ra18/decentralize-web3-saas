@@ -26,11 +26,12 @@ const DEFAULT_TITLE = "Select the most clickable thumbnail"
 
 router.post('/signin', async (req, res) => {
     //todo: add signin verification logic here
-    const hardcodeWalletAddress = "HvsdhfbshdbfytGYusbdjnda1jk32v4jh23v5bk24j5msknd9j";
+    // const hardcodeWalletAddress = "HvsdhfbshdbfytGYusbdjnda1jk32v4jh23v5bk24j5msknd9j";
 
+    const address = req.body.signature
     const existingUser = await prismaClient.user.findFirst({
         where: {
-            address: hardcodeWalletAddress
+            address: address
         }
     })
 
@@ -47,7 +48,7 @@ router.post('/signin', async (req, res) => {
     } else {
         const user = await prismaClient.user.create({
             data: {
-                address: hardcodeWalletAddress
+                address: address
             }
         })
         const token = jwt.sign({
